@@ -1,0 +1,31 @@
+# Render Blueprint — FastAPI backend (development hosting).
+# Free plan: the service sleeps after ~15 minutes idle; the first request
+# after that takes ~50 seconds. Not suitable for live classroom use.
+services:
+  - type: web
+    name: smart-classroom-api
+    runtime: python
+    region: frankfurt
+    plan: free
+    rootDir: backend
+    buildCommand: pip install .
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    autoDeployTrigger: commit
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.13"
+      - key: APP_ENV
+        value: production
+      - key: SUPABASE_URL
+        value: https://mknfybcmphsvhdmapjji.supabase.co
+      - key: CORS_ORIGINS
+        value: https://id-preview--b22b5055-3412-4576-82e2-a7a0c84bbda2.lovable.app,http://localhost:5173
+      - key: DB_POOL_MIN_SIZE
+        value: "1"
+      - key: DB_POOL_MAX_SIZE
+        value: "5"
+      # Secret: entered by the project owner in the Render dashboard, never committed.
+      # Must be the Supabase *Session pooler* URL (Render has no IPv6 for the direct host).
+      - key: DATABASE_URL
+        sync: false
