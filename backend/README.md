@@ -22,7 +22,17 @@ uvicorn app.main:app --reload
 pytest
 ```
 
-الاختبارات لا تحتاج Supabase ولا إنترنت. اختبارات قاعدة البيانات الحقيقية (`-m integration`) تعمل فقط عند ضبط `TEST_DATABASE_URL` على قاعدة **تطوير**، وتُلغي كل تغييراتها في النهاية.
+الاختبارات لا تحتاج Supabase ولا إنترنت.
+
+**اختبارات التكامل** (الدروس والأنشطة مع RLS حقيقية) تحتاج Postgres **محلي** فقط:
+
+```bash
+TEST_ADMIN_DATABASE_URL=postgresql://postgres@127.0.0.1:5432/postgres pytest
+```
+
+تنشئ قاعدة مؤقتة، وتطبّق عليها نسخة مبسطة من Supabase (`tests/db/supabase_stub.sql`) ثم كل ملفات `supabase/migrations`، وتحذفها في النهاية. لا تضعي هنا رابط Supabase أبداً.
+
+`TEST_DATABASE_URL` (اختياري) يشغّل فحصين على قاعدة Supabase **تطوير** ويلغي تغييراته.
 
 ## كيف يعمل الدخول
 

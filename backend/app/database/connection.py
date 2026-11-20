@@ -4,10 +4,18 @@ statement_cache_size=0 keeps the pool compatible with Supabase's poolers,
 which do not support prepared statements in transaction mode.
 """
 
+import json
+
 import asyncpg
 from fastapi import Request
 
 from app.core.config import Settings
+
+
+async def init_connection(conn: asyncpg.Connection) -> None:
+    """Exchange json/jsonb columns as Python dicts/lists instead of raw strings."""
+    for type_name in ("json", "jsonb"):
+        await conn.set_type_codec(type_name, encoder=json.dumps, decoder=json.loads, schema="pg_catalog")
 
 
 async def create_pool(settings: Settings) -> asyncpg.Pool:
@@ -17,6 +25,7 @@ async def create_pool(settings: Settings) -> asyncpg.Pool:
         max_size=settings.db_pool_max_size,
         statement_cache_size=0,
         command_timeout=10,
+        init=init_connection,
     )
 
 

@@ -14,7 +14,9 @@ from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging, log_requests
 from app.core.security import TokenVerifier, build_jwks_resolver
 from app.database.connection import create_pool
+from app.modules.activities.router import router as activities_router
 from app.modules.health.router import router as health_router
+from app.modules.lessons.router import router as lessons_router
 from app.modules.teachers.router import router as teachers_router
 from app.shared.errors.handlers import register_error_handlers
 
@@ -58,6 +60,8 @@ def create_app(settings: Settings | None = None, *, connect_db: bool = True) -> 
 
     app.include_router(health_router)
     app.include_router(teachers_router)
+    app.include_router(lessons_router)
+    app.include_router(activities_router)
     return app
 
 
