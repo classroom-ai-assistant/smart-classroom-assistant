@@ -24,6 +24,8 @@ from app.core.security import TokenVerifier
 from app.main import create_app
 from app.modules.teachers.router import get_teacher_repository
 
+pytest_plugins = ["tests.db.fixtures"]
+
 SUPABASE_URL = "https://test-project.supabase.co"
 ISSUER = f"{SUPABASE_URL}/auth/v1"
 
