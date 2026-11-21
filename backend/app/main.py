@@ -7,6 +7,7 @@ API docs:     http://localhost:8000/docs
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
+import httpx
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -15,8 +16,11 @@ from app.core.logging import configure_logging, log_requests
 from app.core.security import TokenVerifier, build_jwks_resolver
 from app.database.connection import create_pool
 from app.modules.activities.router import router as activities_router
+from app.modules.ai.client import GeminiClient
+from app.modules.ai.deps import AiRateLimiter
 from app.modules.health.router import router as health_router
 from app.modules.lessons.router import router as lessons_router
+from app.modules.suggestions.router import router as suggestions_router
 from app.modules.teachers.router import router as teachers_router
 from app.shared.errors.handlers import register_error_handlers
 
@@ -28,9 +32,17 @@ def create_app(settings: Settings | None = None, *, connect_db: bool = True) -> 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.db_pool = await create_pool(settings) if connect_db else None
+        ai_http = None
+        if settings.gemini_api_key is not None and getattr(app.state, "ai_client", None) is None:
+            ai_http = httpx.AsyncClient(timeout=settings.gemini_timeout_seconds)
+            app.state.ai_client = GeminiClient(
+                settings.gemini_api_key.get_secret_value(), settings.gemini_model, ai_http
+            )
         try:
             yield
         finally:
+            if ai_http is not None:
+                await ai_http.aclose()
             if app.state.db_pool is not None:
                 await app.state.db_pool.close()
 
@@ -42,6 +54,8 @@ def create_app(settings: Settings | None = None, *, connect_db: bool = True) -> 
         redoc_url=None,
     )
     app.state.settings = settings
+    app.state.ai_client = None  # set at startup when GEMINI_API_KEY is configured; tests may inject a fake
+    app.state.ai_limiter = AiRateLimiter(settings.ai_requests_per_hour)
     app.state.token_verifier = TokenVerifier(
         issuer=settings.jwt_issuer,
         audience=settings.jwt_audience,
@@ -62,6 +76,7 @@ def create_app(settings: Settings | None = None, *, connect_db: bool = True) -> 
     app.include_router(teachers_router)
     app.include_router(lessons_router)
     app.include_router(activities_router)
+    app.include_router(suggestions_router)
     return app
 
 

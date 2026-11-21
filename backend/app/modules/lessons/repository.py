@@ -6,7 +6,7 @@ from typing import Any
 from uuid import UUID
 
 from app.database.rls_session import TeacherDatabase
-from app.modules.activities.repository import PLACED_ACTIVITIES_SQL
+from app.modules.activities.repository import PENDING_SUGGESTIONS_SQL, PLACED_ACTIVITIES_SQL
 
 _SUMMARY_COLUMNS = """
     l.id, l.title, l.topic, l.age_group::text as age_group, l.status,
@@ -65,7 +65,12 @@ class LessonRepository:
             if row is None:
                 return None
             activities = await conn.fetch(PLACED_ACTIVITIES_SQL, lesson_id, self._teacher_id)
-        return {**dict(row), "activities": [dict(a) for a in activities]}
+            suggestions = await conn.fetch(PENDING_SUGGESTIONS_SQL, lesson_id, self._teacher_id)
+        return {
+            **dict(row),
+            "activities": [dict(a) for a in activities],
+            "suggestions": [dict(s) for s in suggestions],
+        }
 
     async def create(self, title: str, topic: str, age_group: str) -> UUID:
         async with self._db.transaction() as conn:

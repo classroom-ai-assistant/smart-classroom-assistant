@@ -59,6 +59,8 @@ class LessonSummary(BaseModel):
 
 class LessonDetail(LessonSummary):
     activities: list[ActivityOut]
+    # AI suggestions awaiting the teacher's decision; not part of the lesson yet.
+    suggestions: list[ActivityOut] = []
 
 
 class LessonList(BaseModel):

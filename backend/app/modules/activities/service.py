@@ -1,5 +1,6 @@
 """Activity business logic (FR-008 to FR-011, FR-021)."""
 
+from typing import Any
 from uuid import UUID
 
 from pydantic import ValidationError
@@ -17,6 +18,20 @@ from app.modules.lessons.service import LESSON_NOT_FOUND
 from app.shared.errors.exceptions import NotFoundError, ValidationFailedError
 
 ACTIVITY_NOT_FOUND = "النشاط غير موجود"
+
+
+def validate_content(activity_type: str, content: dict[str, Any]) -> dict[str, Any]:
+    """Validate `content` against the shape of `activity_type`; field errors
+    are reported as content.<path>."""
+    adapter = CONTENT_ADAPTERS[ActivityType(activity_type)]
+    try:
+        return adapter.dump_python(adapter.validate_python(content), mode="json", exclude_none=True)
+    except ValidationError as exc:
+        details = [
+            {"field": ".".join(["content", *(str(p) for p in err["loc"])]), "type": err["type"]}
+            for err in exc.errors()
+        ]
+        raise ValidationFailedError(details=details) from exc
 
 
 class ActivityService:
@@ -40,15 +55,7 @@ class ActivityService:
             current = await self._repo.get(lesson_id, activity_id)
             if current is None:
                 raise NotFoundError(ACTIVITY_NOT_FOUND)
-            adapter = CONTENT_ADAPTERS[ActivityType(current["type"])]
-            try:
-                content = adapter.dump_python(adapter.validate_python(data.content), mode="json", exclude_none=True)
-            except ValidationError as exc:
-                details = [
-                    {"field": ".".join(["content", *(str(p) for p in err["loc"])]), "type": err["type"]}
-                    for err in exc.errors()
-                ]
-                raise ValidationFailedError(details=details) from exc
+            content = validate_content(current["type"], data.content)
 
         row = await self._repo.update(lesson_id, activity_id, data.title, content)
         if row is None:

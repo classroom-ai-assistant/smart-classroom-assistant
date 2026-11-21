@@ -42,3 +42,27 @@ class ServiceUnavailableError(AppError):
     status_code = 503
     code = "service_unavailable"
     message = "الخدمة غير متاحة حالياً، حاولي بعد قليل"
+
+
+class AiUnavailableError(AppError):
+    status_code = 503
+    code = "ai_unavailable"
+    message = "خدمة الذكاء غير مفعّلة حالياً"
+
+
+class AiFailedError(AppError):
+    status_code = 502
+    code = "ai_failed"
+    message = "تعذّر تجهيز المحتوى بالذكاء الآن، حاولي مرة أخرى"
+
+
+class AiRateLimitedError(AppError):
+    status_code = 429
+    code = "ai_rate_limited"
+    message = "وصلتِ للحد المسموح من طلبات الذكاء، حاولي بعد قليل"
+
+
+class AiRejectedError(AppError):
+    status_code = 422
+    code = "ai_rejected"
+    message = "ما قدرنا نجهّز محتوى مناسباً لهذا الطلب، جرّبي صياغة مختلفة"
