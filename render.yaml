@@ -29,3 +29,10 @@ services:
       # Must be the Supabase *Session pooler* URL (Render has no IPv6 for the direct host).
       - key: DATABASE_URL
         sync: false
+      # AI content (slice 3). The key is a secret entered in the Render dashboard.
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-3.8-flash
+      - key: AI_REQUESTS_PER_HOUR
+        value: "30"

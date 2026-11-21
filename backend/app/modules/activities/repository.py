@@ -2,8 +2,8 @@
 applies; explicit teacher_id filters are a second guard.
 
 Only activities PLACED in a lesson (order_index not null) belong to the
-lesson's content. Unplaced rows are AI suggestions awaiting the teacher
-(slice 3) and are never returned here.
+lesson's content. Unplaced rows are AI suggestions awaiting the teacher;
+they are handled by app.modules.suggestions.
 """
 
 from typing import Any
@@ -24,6 +24,14 @@ select {ACTIVITY_COLUMNS}
 from public.activities a
 where a.lesson_id = $1 and a.teacher_id = $2 and a.order_index is not null
 order by a.order_index
+"""
+
+# AI suggestions waiting for the teacher: never placed, never shown to children.
+PENDING_SUGGESTIONS_SQL = f"""
+select {ACTIVITY_COLUMNS}
+from public.activities a
+where a.lesson_id = $1 and a.teacher_id = $2 and a.order_index is null and a.approval_status = 'proposed'
+order by a.created_at, a.id
 """
 
 _LOCK_LESSON_SQL = "select 1 from public.lessons where id = $1 and teacher_id = $2 for update"
