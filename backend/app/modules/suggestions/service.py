@@ -5,6 +5,7 @@ becomes part of the lesson (or reaches children) until she approves it.
 The AI call happens outside any database transaction.
 """
 
+import logging
 from typing import Any
 from uuid import UUID
 
@@ -25,6 +26,8 @@ from app.modules.suggestions.schemas import (
     SuggestLessonRequest,
 )
 from app.shared.errors.exceptions import AiFailedError, AiUnavailableError, NotFoundError, ValidationFailedError
+
+logger = logging.getLogger("app.ai")
 
 SUGGESTION_NOT_FOUND = "الاقتراح غير موجود"
 TOO_MANY_PENDING = "عندك اقتراحات كثيرة بانتظار قرارك، اعتمدي أو احذفي بعضها أولاً"
@@ -79,6 +82,7 @@ class SuggestionService:
                 raw = await self._ai.generate_json(system, prompt + (prompts.retry_note(problem) if attempt else ""))
                 return convert(raw)
             except (ValueError, ValidationError, AiReplyFormatError) as exc:
+                logger.warning("ai reply did not fit (attempt %s): %s", attempt + 1, type(exc).__name__)
                 problem = "JSON غير صالح" if isinstance(exc, AiReplyFormatError) else "حقول ناقصة أو أطول من المسموح"
         raise AiFailedError()
 
