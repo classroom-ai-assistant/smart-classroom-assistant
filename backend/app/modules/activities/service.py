@@ -5,15 +5,18 @@ from uuid import UUID
 
 from pydantic import ValidationError
 
+from app.database.rls_session import TeacherDatabase
 from app.modules.activities.repository import ActivityRepository
 from app.modules.activities.schemas import (
     CONTENT_ADAPTERS,
+    content_asset_ids,
     ActivityCreate,
     ActivityOrder,
     ActivityOut,
     ActivityType,
     ActivityUpdate,
 )
+from app.modules.assets.repository import missing_assets
 from app.modules.lessons.service import LESSON_NOT_FOUND
 from app.shared.errors.exceptions import NotFoundError, ValidationFailedError
 
@@ -34,14 +37,23 @@ def validate_content(activity_type: str, content: dict[str, Any]) -> dict[str, A
         raise ValidationFailedError(details=details) from exc
 
 
+async def ensure_page_assets(db: TeacherDatabase, activity_type: str, content: dict[str, Any]) -> None:
+    """Every image on the pages must be one of the teacher's own files."""
+    parsed = CONTENT_ADAPTERS[ActivityType(activity_type)].validate_python(content)
+    if await missing_assets(db, content_asset_ids(parsed)):
+        raise ValidationFailedError(
+            "فيه صورة في الصفحة غير موجودة في ملفاتك", details=[{"field": "content", "type": "unknown_asset"}]
+        )
+
+
 class ActivityService:
     def __init__(self, repo: ActivityRepository) -> None:
         self._repo = repo
 
     async def create(self, lesson_id: UUID, data: ActivityCreate) -> ActivityOut:
-        row = await self._repo.create_manual(
-            lesson_id, data.type, data.title, data.content.model_dump(mode="json", exclude_none=True)
-        )
+        content = data.content.model_dump(mode="json", exclude_none=True)
+        await ensure_page_assets(self._repo.db, data.type, content)
+        row = await self._repo.create_manual(lesson_id, data.type, data.title, content)
         if row is None:
             raise NotFoundError(LESSON_NOT_FOUND)
         return ActivityOut(**row)
@@ -56,6 +68,7 @@ class ActivityService:
             if current is None:
                 raise NotFoundError(ACTIVITY_NOT_FOUND)
             content = validate_content(current["type"], data.content)
+            await ensure_page_assets(self._repo.db, current["type"], content)
 
         row = await self._repo.update(lesson_id, activity_id, data.title, content)
         if row is None:

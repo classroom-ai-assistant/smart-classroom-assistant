@@ -89,3 +89,12 @@ class AssetRepository:
                 asset_id,
                 self._teacher_id,
             )
+
+
+async def missing_assets(db: TeacherDatabase, ids: set[UUID]) -> set[UUID]:
+    """Image ids a page refers to that are not this teacher's files (RLS)."""
+    if not ids:
+        return set()
+    async with db.transaction() as conn:
+        found = await conn.fetch("select id from public.assets where id = any($1::uuid[])", list(ids))
+    return ids - {r["id"] for r in found}

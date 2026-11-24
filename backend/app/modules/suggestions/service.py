@@ -12,7 +12,7 @@ from uuid import UUID
 from pydantic import TypeAdapter, ValidationError
 
 from app.modules.activities.schemas import ActivityCreate, ActivityOut, ActivityType, ActivityUpdate
-from app.modules.activities.service import validate_content
+from app.modules.activities.service import ensure_page_assets, validate_content
 from app.modules.ai import prompts
 from app.modules.ai.client import AiClient, AiReplyFormatError
 from app.modules.ai.deps import AiRateLimiter
@@ -130,6 +130,7 @@ class SuggestionService:
             if current is None:
                 raise NotFoundError(SUGGESTION_NOT_FOUND)
             content = validate_content(current["type"], data.content)
+            await ensure_page_assets(self._repo.db, current["type"], content)
         row = await self._repo.approve(lesson_id, suggestion_id, title, content)
         if row is None:
             raise NotFoundError(SUGGESTION_NOT_FOUND)

@@ -16,6 +16,10 @@ class SuggestionRepository:
         self._db = db
         self._teacher_id = db.teacher.id
 
+    @property
+    def db(self) -> TeacherDatabase:
+        return self._db
+
     async def lesson_context(self, lesson_id: UUID) -> dict[str, Any] | None:
         """Lesson fields the AI may see, plus the number of pending suggestions."""
         async with self._db.transaction() as conn:
