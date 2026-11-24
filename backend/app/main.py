@@ -16,6 +16,7 @@ from app.core.logging import configure_logging, log_requests
 from app.core.security import TokenVerifier, build_jwks_resolver
 from app.database.connection import create_pool
 from app.modules.activities.router import router as activities_router
+from app.modules.assets.router import router as assets_router
 from app.modules.ai.client import GeminiClient
 from app.modules.ai.deps import AiRateLimiter
 from app.modules.health.router import router as health_router
@@ -92,6 +93,7 @@ def create_app(settings: Settings | None = None, *, connect_db: bool = True) -> 
     app.include_router(activities_router)
     app.include_router(suggestions_router)
     app.include_router(speech_router)
+    app.include_router(assets_router)
     return app
 
 
