@@ -22,6 +22,7 @@ from app.modules.ai.deps import AiRateLimiter
 from app.modules.health.router import router as health_router
 from app.modules.lessons.router import router as lessons_router
 from app.modules.saved_pages.router import router as saved_pages_router
+from app.modules.slides.router import router as slides_router
 from app.modules.speech.client import GeminiSpeechClient
 from app.modules.speech.router import router as speech_router
 from app.modules.suggestions.router import router as suggestions_router
@@ -96,6 +97,7 @@ def create_app(settings: Settings | None = None, *, connect_db: bool = True) -> 
     app.include_router(speech_router)
     app.include_router(assets_router)
     app.include_router(saved_pages_router)
+    app.include_router(slides_router)
     return app
 
 

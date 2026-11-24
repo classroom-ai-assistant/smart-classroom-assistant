@@ -7,12 +7,14 @@ from uuid import UUID
 
 from app.database.rls_session import TeacherDatabase
 from app.modules.activities.repository import PENDING_SUGGESTIONS_SQL, PLACED_ACTIVITIES_SQL
+from app.modules.slides.repository import SLIDES_SQL
 
 _SUMMARY_COLUMNS = """
     l.id, l.title, l.topic, l.age_group::text as age_group, l.status,
     l.copied_from_lesson_id, l.created_at, l.updated_at,
     (select count(*) from public.activities a
-      where a.lesson_id = l.id and a.order_index is not null)::int as activity_count
+      where a.lesson_id = l.id and a.order_index is not null)::int as activity_count,
+    (select count(*) from public.slides s where s.lesson_id = l.id)::int as slide_count
 """
 
 UPDATABLE_LESSON_COLUMNS = frozenset({"title", "topic", "age_group"})
@@ -66,8 +68,10 @@ class LessonRepository:
                 return None
             activities = await conn.fetch(PLACED_ACTIVITIES_SQL, lesson_id, self._teacher_id)
             suggestions = await conn.fetch(PENDING_SUGGESTIONS_SQL, lesson_id, self._teacher_id)
+            slides = await conn.fetch(SLIDES_SQL, lesson_id, self._teacher_id)
         return {
             **dict(row),
+            "slides": [dict(s) for s in slides],
             "activities": [dict(a) for a in activities],
             "suggestions": [dict(s) for s in suggestions],
         }
@@ -108,7 +112,7 @@ class LessonRepository:
         return result == "DELETE 1"
 
     async def copy(self, lesson_id: UUID) -> UUID | None:
-        """FR-013: new editable lesson with copies of the placed activities.
+        """FR-013: new editable lesson with copies of its slides and placed activities.
         The source lesson is not modified (ACC-04)."""
         async with self._db.transaction() as conn:
             source = await conn.fetchrow(
@@ -135,6 +139,16 @@ class LessonRepository:
                        case when approval_status = 'approved' then now() end, order_index
                 from public.activities
                 where lesson_id = $2 and teacher_id = $3 and order_index is not null
+                """,
+                new_id,
+                lesson_id,
+                self._teacher_id,
+            )
+            await conn.execute(
+                """
+                insert into public.slides (lesson_id, teacher_id, order_index, layout, speech, question)
+                select $1, teacher_id, order_index, layout, speech, question
+                from public.slides where lesson_id = $2 and teacher_id = $3
                 """,
                 new_id,
                 lesson_id,
