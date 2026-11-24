@@ -20,6 +20,8 @@ from app.modules.ai.client import GeminiClient
 from app.modules.ai.deps import AiRateLimiter
 from app.modules.health.router import router as health_router
 from app.modules.lessons.router import router as lessons_router
+from app.modules.speech.client import GeminiSpeechClient
+from app.modules.speech.router import router as speech_router
 from app.modules.suggestions.router import router as suggestions_router
 from app.modules.teachers.router import router as teachers_router
 from app.shared.errors.handlers import register_error_handlers
@@ -41,6 +43,13 @@ def create_app(settings: Settings | None = None, *, connect_db: bool = True) -> 
                 ai_http,
                 fallback_model=settings.gemini_fallback_model or None,
             )
+        if ai_http is not None and getattr(app.state, "speech_client", None) is None:
+            app.state.speech_client = GeminiSpeechClient(
+                settings.gemini_api_key.get_secret_value(),
+                settings.gemini_tts_model,
+                ai_http,
+                fallback_model=settings.gemini_tts_fallback_model or None,
+            )
         try:
             yield
         finally:
@@ -59,6 +68,8 @@ def create_app(settings: Settings | None = None, *, connect_db: bool = True) -> 
     app.state.settings = settings
     app.state.ai_client = None  # set at startup when GEMINI_API_KEY is configured; tests may inject a fake
     app.state.ai_limiter = AiRateLimiter(settings.ai_requests_per_hour)
+    app.state.speech_client = None  # set at startup with GEMINI_API_KEY; tests may inject a fake
+    app.state.speech_limiter = AiRateLimiter(settings.speech_requests_per_hour)
     app.state.token_verifier = TokenVerifier(
         issuer=settings.jwt_issuer,
         audience=settings.jwt_audience,
@@ -80,6 +91,7 @@ def create_app(settings: Settings | None = None, *, connect_db: bool = True) -> 
     app.include_router(lessons_router)
     app.include_router(activities_router)
     app.include_router(suggestions_router)
+    app.include_router(speech_router)
     return app
 
 
