@@ -70,8 +70,19 @@ class GeminiClient:
         if response.status_code == 429:
             raise AiRateLimitedError("خدمة الذكاء مشغولة أو وصلت حدّها، حاولي بعد قليل")
         if response.status_code != 200:
-            # Status only: the body may echo request details.
-            logger.warning("gemini returned HTTP %s", response.status_code)
+            # Google's error status/message (e.g. API_KEY_INVALID, model NOT_FOUND)
+            # says what is wrong; it never contains the key or our prompt.
+            try:
+                error = response.json().get("error", {})
+            except ValueError:
+                error = {}
+            logger.warning(
+                "gemini returned HTTP %s model=%s status=%s message=%s",
+                response.status_code,
+                self._model,
+                error.get("status"),
+                str(error.get("message", ""))[:200],
+            )
             raise AiFailedError()
 
         data = response.json()
