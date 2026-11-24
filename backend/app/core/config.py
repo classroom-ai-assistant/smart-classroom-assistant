@@ -37,6 +37,11 @@ class Settings(BaseSettings):
     # Per-teacher cap on AI calls, protecting the API quota.
     ai_requests_per_hour: int = Field(default=30, ge=1)
 
+    # Robot voice (TTS PoC); uses the same GEMINI_API_KEY.
+    gemini_tts_model: str = "gemini-3.8-flash-tts"
+    gemini_tts_fallback_model: str | None = "gemini-3.8-flash-lite-tts"
+    speech_requests_per_hour: int = Field(default=60, ge=1)
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def _split_origins(cls, value: object) -> object:

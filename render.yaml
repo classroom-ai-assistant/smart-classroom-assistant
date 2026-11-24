@@ -38,3 +38,8 @@ services:
         value: gemini-3.5-flash-lite
       - key: AI_REQUESTS_PER_HOUR
         value: "30"
+      # Robot voice (TTS PoC), same key.
+      - key: GEMINI_TTS_MODEL
+        value: gemini-3.8-flash-tts
+      - key: GEMINI_TTS_FALLBACK_MODEL
+        value: gemini-3.8-flash-lite-tts
