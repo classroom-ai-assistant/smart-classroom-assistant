@@ -14,6 +14,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, TypeAdapter
 
+from app.modules.pages.layout import PageLayouts, asset_ids
+
 
 def _text(max_length: int) -> Any:
     return Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=max_length)]
@@ -27,9 +29,11 @@ class _Strict(BaseModel):
 
 
 # ---------------------------------------------------------------- content
+# Each segment / question / step is a page; `layouts` is its visual form per mode.
 class StorySegment(_Strict):
     text: _text(2000)
     question: _text(300) | None = None
+    layouts: PageLayouts | None = None
 
 
 class StoryContent(_Strict):
@@ -41,6 +45,7 @@ class QaQuestion(_Strict):
     expected_answers: list[_text(100)] = Field(default_factory=list, max_length=10)
     hint: _text(300) | None = None
     simpler_question: _text(300) | None = None
+    layouts: PageLayouts | None = None
 
 
 class QaContent(_Strict):
@@ -49,6 +54,7 @@ class QaContent(_Strict):
 
 class InteractiveStep(_Strict):
     text: _text(500)
+    layouts: PageLayouts | None = None
 
 
 class InteractiveContent(_Strict):
@@ -60,6 +66,22 @@ class ActivityType(StrEnum):
     story = "story"
     qa_dialogue = "qa_dialogue"
     interactive = "interactive"
+
+
+PAGE_MODELS: dict[ActivityType, type[_Strict]] = {
+    ActivityType.story: StorySegment,
+    ActivityType.qa_dialogue: QaQuestion,
+    ActivityType.interactive: InteractiveStep,
+}
+
+
+def content_asset_ids(content: StoryContent | QaContent | InteractiveContent) -> set[UUID]:
+    """Every image referenced by the pages of an activity."""
+    pages = getattr(content, "segments", None) or getattr(content, "questions", None) or content.steps
+    found: set[UUID] = set()
+    for page in pages:
+        found |= asset_ids(page.layouts)
+    return found
 
 
 CONTENT_ADAPTERS: dict[ActivityType, TypeAdapter[Any]] = {

@@ -60,6 +60,10 @@ class ActivityRepository:
         self._db = db
         self._teacher_id = db.teacher.id
 
+    @property
+    def db(self) -> TeacherDatabase:
+        return self._db
+
     async def get(self, lesson_id: UUID, activity_id: UUID) -> dict[str, Any] | None:
         async with self._db.transaction() as conn:
             row = await conn.fetchrow(
