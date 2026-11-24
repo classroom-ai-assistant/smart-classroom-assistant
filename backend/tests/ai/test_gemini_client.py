@@ -13,10 +13,10 @@ from app.core.config import Settings
 from app.main import create_app
 from app.modules.ai.client import AiReplyFormatError, GeminiClient, parse_json_reply
 from app.modules.ai.deps import AiRateLimiter
-from app.shared.errors.exceptions import AiFailedError, AiRateLimitedError, AiRejectedError
+from app.shared.errors.exceptions import AiBusyError, AiFailedError, AiRateLimitedError, AiRejectedError
 
 
-def _client(handler) -> tuple[GeminiClient, list[httpx.Request]]:
+def _client(handler, fallback: str | None = None) -> tuple[GeminiClient, list[httpx.Request]]:
     seen: list[httpx.Request] = []
 
     def _wrapped(request: httpx.Request) -> httpx.Response:
@@ -24,7 +24,7 @@ def _client(handler) -> tuple[GeminiClient, list[httpx.Request]]:
         return handler(request)
 
     http = httpx.AsyncClient(transport=httpx.MockTransport(_wrapped))
-    return GeminiClient("test-key-not-real", "test-model", http), seen
+    return GeminiClient("test-key-not-real", "test-model", http, fallback_model=fallback), seen
 
 
 def _reply(text: str, finish: str = "STOP") -> httpx.Response:
@@ -62,7 +62,9 @@ def test_unparseable_reply(text):
     [
         (httpx.Response(429, json={}), AiRateLimitedError),
         (httpx.Response(400, json={"error": {"message": "API key not valid"}}), AiFailedError),
-        (httpx.Response(500, json={}), AiFailedError),
+        (httpx.Response(500, json={}), AiBusyError),
+        (httpx.Response(503, json={"error": {"status": "UNAVAILABLE"}}), AiBusyError),
+        (httpx.Response(404, json={"error": {"status": "NOT_FOUND"}}), AiFailedError),
         (httpx.Response(200, json={"promptFeedback": {"blockReason": "SAFETY"}}), AiRejectedError),
         (_reply("", finish="SAFETY"), AiRejectedError),
         (httpx.Response(200, json={"candidates": []}), AiFailedError),
@@ -74,13 +76,38 @@ def test_error_mapping(response, error):
         asyncio.run(client.generate_json("s", "p"))
 
 
-def test_network_failure_is_ai_failed():
+def test_network_failure_without_fallback_is_busy():
     def boom(_: httpx.Request) -> httpx.Response:
         raise httpx.ConnectTimeout("timeout")
 
     client, _ = _client(boom)
+    with pytest.raises(AiBusyError):
+        asyncio.run(client.generate_json("s", "p"))
+
+
+def test_overloaded_model_falls_back_to_the_second_model():
+    def handler(request: httpx.Request) -> httpx.Response:
+        if "test-model:" in request.url.path:
+            return httpx.Response(503, json={"error": {"status": "UNAVAILABLE", "message": "high demand"}})
+        return _reply('{"ok": true}')
+
+    client, seen = _client(handler, fallback="lite-model")
+    assert asyncio.run(client.generate_json("s", "p")) == {"ok": True}
+    assert [r.url.path.rsplit("/", 1)[-1] for r in seen] == ["test-model:generateContent", "lite-model:generateContent"]
+
+
+def test_both_models_overloaded_is_busy():
+    client, seen = _client(lambda _: httpx.Response(503, json={}), fallback="lite-model")
+    with pytest.raises(AiBusyError):
+        asyncio.run(client.generate_json("s", "p"))
+    assert len(seen) == 2
+
+
+def test_key_errors_do_not_fall_back():
+    client, seen = _client(lambda _: httpx.Response(401, json={}), fallback="lite-model")
     with pytest.raises(AiFailedError):
         asyncio.run(client.generate_json("s", "p"))
+    assert len(seen) == 1
 
 
 def test_rate_limiter_is_per_teacher():

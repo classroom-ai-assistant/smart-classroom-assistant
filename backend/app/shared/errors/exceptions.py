@@ -66,3 +66,9 @@ class AiRejectedError(AppError):
     status_code = 422
     code = "ai_rejected"
     message = "ما قدرنا نجهّز محتوى مناسباً لهذا الطلب، جرّبي صياغة مختلفة"
+
+
+class AiBusyError(AppError):
+    status_code = 503
+    code = "ai_busy"
+    message = "خدمة الذكاء عليها ضغط الحين، حاولي بعد دقيقة"
