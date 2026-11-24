@@ -68,6 +68,14 @@ class ImageElement(_Box):
     outline: bool = False
 
 
+class VideoElement(_Box):
+    type: Literal["video"]
+    asset_id: UUID
+    autoplay: bool = False
+    muted: bool = False
+    loop: bool = False
+
+
 class ShapeElement(_Box):
     type: Literal["shape"]
     shape: Literal["rect", "rounded", "circle", "star", "heart", "cloud"]
@@ -77,7 +85,7 @@ class ShapeElement(_Box):
     dashed: bool = False
 
 
-Element = Annotated[TextElement | ImageElement | ShapeElement, Field(discriminator="type")]
+Element = Annotated[TextElement | ImageElement | VideoElement | ShapeElement, Field(discriminator="type")]
 
 
 class Layout(_Strict):
@@ -98,11 +106,23 @@ class PageLayouts(_Strict):
     card: Layout | None = None
 
 
-def asset_ids(layouts: PageLayouts | None) -> set[UUID]:
+def layout_assets(layout: Layout | None) -> dict[UUID, str]:
+    """asset id -> the file kind the element needs ('image' or 'video')."""
+    if layout is None:
+        return {}
+    found: dict[UUID, str] = {}
+    for e in layout.elements:
+        if isinstance(e, ImageElement):
+            found[e.asset_id] = "image"
+        elif isinstance(e, VideoElement):
+            found[e.asset_id] = "video"
+    return found
+
+
+def asset_ids(layouts: PageLayouts | None) -> dict[UUID, str]:
     if layouts is None:
-        return set()
-    found: set[UUID] = set()
+        return {}
+    found: dict[UUID, str] = {}
     for layout in (layouts.slide, layouts.worksheet, layouts.card):
-        if layout:
-            found.update(e.asset_id for e in layout.elements if isinstance(e, ImageElement))
+        found |= layout_assets(layout)
     return found

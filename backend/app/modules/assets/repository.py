@@ -91,10 +91,15 @@ class AssetRepository:
             )
 
 
-async def missing_assets(db: TeacherDatabase, ids: set[UUID]) -> set[UUID]:
-    """Image ids a page refers to that are not this teacher's files (RLS)."""
-    if not ids:
+async def missing_assets(db: TeacherDatabase, wanted: dict[UUID, str] | set[UUID]) -> set[UUID]:
+    """Files a page refers to that are not this teacher's (RLS), or are the
+    wrong kind (an image element pointing at a video, say)."""
+    if not wanted:
         return set()
+    kinds = wanted if isinstance(wanted, dict) else dict.fromkeys(wanted)
     async with db.transaction() as conn:
-        found = await conn.fetch("select id from public.assets where id = any($1::uuid[])", list(ids))
-    return ids - {r["id"] for r in found}
+        rows = await conn.fetch(
+            "select id, kind::text as kind from public.assets where id = any($1::uuid[])", list(kinds)
+        )
+    have = {r["id"]: r["kind"] for r in rows}
+    return {i for i, k in kinds.items() if i not in have or (k is not None and have[i] != k)}

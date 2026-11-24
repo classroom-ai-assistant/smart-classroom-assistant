@@ -75,10 +75,10 @@ PAGE_MODELS: dict[ActivityType, type[_Strict]] = {
 }
 
 
-def content_asset_ids(content: StoryContent | QaContent | InteractiveContent) -> set[UUID]:
-    """Every image referenced by the pages of an activity."""
+def content_asset_ids(content: StoryContent | QaContent | InteractiveContent) -> dict[UUID, str]:
+    """Every file (id -> needed kind) referenced by the pages of an activity."""
     pages = getattr(content, "segments", None) or getattr(content, "questions", None) or content.steps
-    found: set[UUID] = set()
+    found: dict[UUID, str] = {}
     for page in pages:
         found |= asset_ids(page.layouts)
     return found

@@ -8,6 +8,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, StringConstraints, model_validator
 
 from app.modules.activities.schemas import ActivityOut
+from app.modules.slides.schemas import SlideOut
 
 LessonTitle = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=150)]
 LessonTopic = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
@@ -52,6 +53,7 @@ class LessonSummary(BaseModel):
     age_group: AgeGroup
     status: Literal["draft", "ready"]  # derived, never stored (FR-015, BRL-12)
     activity_count: int
+    slide_count: int = 0
     copied_from_lesson_id: UUID | None
     created_at: datetime
     updated_at: datetime
@@ -61,6 +63,8 @@ class LessonDetail(LessonSummary):
     activities: list[ActivityOut]
     # AI suggestions awaiting the teacher's decision; not part of the lesson yet.
     suggestions: list[ActivityOut] = []
+    # The lesson as a deck (the main editor since 2026-11-24).
+    slides: list[SlideOut] = []
 
 
 class LessonList(BaseModel):
