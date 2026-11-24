@@ -38,6 +38,12 @@ class ValidationFailedError(AppError):
     message = "تحقّقي من الحقول المحددة"
 
 
+class ConflictError(AppError):
+    status_code = 409
+    code = "conflict"
+    message = "العنصر موجود من قبل"
+
+
 class ServiceUnavailableError(AppError):
     status_code = 503
     code = "service_unavailable"

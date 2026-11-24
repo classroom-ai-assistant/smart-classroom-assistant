@@ -51,6 +51,7 @@ create table storage.objects (
   bucket_id text references storage.buckets (id),
   name text not null,
   owner uuid,
+  metadata jsonb,  -- Supabase fills size/mimetype after upload
   created_at timestamptz default now()
 );
 alter table storage.objects enable row level security;
