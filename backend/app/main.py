@@ -36,7 +36,10 @@ def create_app(settings: Settings | None = None, *, connect_db: bool = True) -> 
         if settings.gemini_api_key is not None and getattr(app.state, "ai_client", None) is None:
             ai_http = httpx.AsyncClient(timeout=settings.gemini_timeout_seconds)
             app.state.ai_client = GeminiClient(
-                settings.gemini_api_key.get_secret_value(), settings.gemini_model, ai_http
+                settings.gemini_api_key.get_secret_value(),
+                settings.gemini_model,
+                ai_http,
+                fallback_model=settings.gemini_fallback_model or None,
             )
         try:
             yield

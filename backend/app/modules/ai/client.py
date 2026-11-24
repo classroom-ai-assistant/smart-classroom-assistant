@@ -14,11 +14,13 @@ from typing import Any, Protocol
 
 import httpx
 
-from app.shared.errors.exceptions import AiFailedError, AiRateLimitedError, AiRejectedError
+from app.shared.errors.exceptions import AiBusyError, AiFailedError, AiRateLimitedError, AiRejectedError
 
 logger = logging.getLogger("app.ai")
 
 API_BASE = "https://generativelanguage.googleapis.com/v1beta"
+# Google-side overload or outage: worth trying the fallback model.
+_TRANSIENT = {500, 502, 503, 504}
 _FENCE = re.compile(r"^```(?:json)?\s*|\s*```$", re.IGNORECASE)
 
 
@@ -46,9 +48,12 @@ def parse_json_reply(text: str) -> Any:
 
 
 class GeminiClient:
-    def __init__(self, api_key: str, model: str, http: httpx.AsyncClient) -> None:
+    """Tries the primary model, then the fallback model when Google reports
+    overload (e.g. 503 "high demand") or the request times out."""
+
+    def __init__(self, api_key: str, model: str, http: httpx.AsyncClient, fallback_model: str | None = None) -> None:
         self._api_key = api_key
-        self._model = model
+        self._models = [model] + ([fallback_model] if fallback_model and fallback_model != model else [])
         self._http = http
 
     async def generate_json(self, system: str, prompt: str) -> Any:
@@ -57,32 +62,44 @@ class GeminiClient:
             "contents": [{"role": "user", "parts": [{"text": prompt}]}],
             "generationConfig": {"temperature": 0.8},
         }
-        try:
-            response = await self._http.post(
-                f"{API_BASE}/models/{self._model}:generateContent",
-                json=body,
-                headers={"x-goog-api-key": self._api_key},
-            )
-        except httpx.HTTPError as exc:
-            logger.warning("gemini request failed: %s", type(exc).__name__)
-            raise AiFailedError() from exc
-
-        if response.status_code == 429:
-            raise AiRateLimitedError("خدمة الذكاء مشغولة أو وصلت حدّها، حاولي بعد قليل")
-        if response.status_code != 200:
-            # Google's error status/message (e.g. API_KEY_INVALID, model NOT_FOUND)
-            # says what is wrong; it never contains the key or our prompt.
+        for model in self._models:
             try:
-                error = response.json().get("error", {})
-            except ValueError:
-                error = {}
-            logger.warning(
-                "gemini returned HTTP %s model=%s status=%s message=%s",
-                response.status_code,
-                self._model,
-                error.get("status"),
-                str(error.get("message", ""))[:200],
-            )
+                response = await self._http.post(
+                    f"{API_BASE}/models/{model}:generateContent",
+                    json=body,
+                    headers={"x-goog-api-key": self._api_key},
+                )
+            except httpx.HTTPError as exc:
+                logger.warning("gemini request failed model=%s: %s", model, type(exc).__name__)
+                continue
+            if response.status_code in _TRANSIENT:
+                self._log_error(response, model)
+                continue
+            return self._read(response, model)
+        raise AiBusyError()
+
+    @staticmethod
+    def _log_error(response: httpx.Response, model: str) -> None:
+        # Google's error status/message (e.g. API_KEY_INVALID, NOT_FOUND,
+        # UNAVAILABLE) says what is wrong; it never contains the key or our prompt.
+        try:
+            error = response.json().get("error", {})
+        except ValueError:
+            error = {}
+        logger.warning(
+            "gemini returned HTTP %s model=%s status=%s message=%s",
+            response.status_code,
+            model,
+            error.get("status"),
+            str(error.get("message", ""))[:200],
+        )
+
+    def _read(self, response: httpx.Response, model: str) -> Any:
+        if response.status_code == 429:
+            self._log_error(response, model)
+            raise AiRateLimitedError("خدمة الذكاء وصلت حدّها، حاولي بعد قليل")
+        if response.status_code != 200:
+            self._log_error(response, model)
             raise AiFailedError()
 
         data = response.json()

@@ -30,7 +30,10 @@ class Settings(BaseSettings):
     # everything else keeps working. The key lives only in the host's env.
     gemini_api_key: SecretStr | None = None
     gemini_model: str = "gemini-3.8-flash"
-    gemini_timeout_seconds: float = Field(default=60, gt=0)
+    # Used when the main model is overloaded or down; empty disables it.
+    gemini_fallback_model: str | None = "gemini-3.5-flash-lite"
+    # Per model call; primary + fallback must fit in the frontend's 90 s.
+    gemini_timeout_seconds: float = Field(default=40, gt=0)
     # Per-teacher cap on AI calls, protecting the API quota.
     ai_requests_per_hour: int = Field(default=30, ge=1)
 
