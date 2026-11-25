@@ -26,7 +26,15 @@ ElementId = Annotated[str, StringConstraints(pattern=re.compile(r"^[A-Za-z0-9_-]
 Percent = Annotated[float, Field(ge=-50, le=150)]  # a little off-page is allowed while dragging
 Size = Annotated[float, Field(gt=0, le=200)]
 
-MAX_ELEMENTS = 30
+MAX_ELEMENTS = 40
+
+SHAPES = (
+    "rect", "rounded", "circle", "star", "heart", "cloud",
+    "triangle", "diamond", "pentagon", "hexagon", "arrow", "speech_bubble",
+    "sun", "moon", "flower", "line",
+)
+# Arabic web fonts the editor offers (loaded by the frontend from Google Fonts).
+FONTS = ("tajawal", "cairo", "almarai", "changa", "amiri", "reem_kufi", "lalezar", "el_messiri")
 
 
 class _Strict(BaseModel):
@@ -41,6 +49,9 @@ class _Box(_Strict):
     h: Size
     rotation: float = Field(default=0, ge=-360, le=360)
     z: int = Field(default=0, ge=0, le=1000)
+    opacity: float = Field(default=1, ge=0, le=1)
+    # Locked elements (e.g. template decoration) cannot be moved by accident.
+    locked: bool = False
 
 
 class TextElement(_Box):
@@ -51,12 +62,31 @@ class TextElement(_Box):
     font_size: float = Field(default=6, gt=0, le=40)  # percent of page height
     color: HexColor = "#68546F"
     bold: bool = False
+    underline: bool = False
+    font: Literal[FONTS] = "tajawal"  # type: ignore[valid-type]
     align: Literal["start", "center", "end"] = "center"
+    # Optional highlight box behind the text.
+    background: HexColor | None = None
 
     @model_validator(mode="after")
     def _has_text(self) -> "TextElement":
         if self.binding is None and not self.text.strip():
             raise ValueError("text element needs text or a binding")
+        return self
+
+
+class Crop(_Strict):
+    """Visible part of the image, as percentages of the original."""
+
+    x: float = Field(ge=0, lt=100)
+    y: float = Field(ge=0, lt=100)
+    w: float = Field(gt=0, le=100)
+    h: float = Field(gt=0, le=100)
+
+    @model_validator(mode="after")
+    def _inside(self) -> "Crop":
+        if self.x + self.w > 100.001 or self.y + self.h > 100.001:
+            raise ValueError("crop must stay inside the image")
         return self
 
 
@@ -66,6 +96,8 @@ class ImageElement(_Box):
     fit: Literal["contain", "cover"] = "contain"
     # Worksheet mode can print images as outlines for colouring.
     outline: bool = False
+    crop: "Crop | None" = None
+    flip: bool = False  # mirror horizontally
 
 
 class VideoElement(_Box):
@@ -78,7 +110,7 @@ class VideoElement(_Box):
 
 class ShapeElement(_Box):
     type: Literal["shape"]
-    shape: Literal["rect", "rounded", "circle", "star", "heart", "cloud"]
+    shape: Literal[SHAPES]  # type: ignore[valid-type]
     fill: HexColor = "#FCDC9F"
     stroke: HexColor | None = None
     # Worksheet tracing: e.g. a dotted number to write over.
@@ -90,6 +122,8 @@ Element = Annotated[TextElement | ImageElement | VideoElement | ShapeElement, Fi
 
 class Layout(_Strict):
     background: HexColor = "#FAEFE9"
+    # Optional picture covering the whole slide (one of the teacher's images).
+    background_asset_id: UUID | None = None
     elements: list[Element] = Field(default_factory=list, max_length=MAX_ELEMENTS)
 
     @model_validator(mode="after")
@@ -111,6 +145,8 @@ def layout_assets(layout: Layout | None) -> dict[UUID, str]:
     if layout is None:
         return {}
     found: dict[UUID, str] = {}
+    if layout.background_asset_id:
+        found[layout.background_asset_id] = "image"
     for e in layout.elements:
         if isinstance(e, ImageElement):
             found[e.asset_id] = "image"
