@@ -46,7 +46,7 @@ class SlideService:
             row = await self._repo.insert(
                 lesson_id,
                 data.position,
-                data.layout.model_dump(mode="json"),
+                data.layout.model_dump(mode="json", exclude_none=True),
                 data.speech or None,
                 data.question.model_dump(mode="json", exclude_none=True) if data.question else None,
             )
@@ -80,7 +80,7 @@ class SlideService:
         values: dict[str, Any] = {}
         if data.layout is not None:
             await self._check_files(data.layout)
-            values["layout"] = data.layout.model_dump(mode="json")
+            values["layout"] = data.layout.model_dump(mode="json", exclude_none=True)
         if "speech" in fields:
             values["speech"] = data.speech or None
         if "question" in fields:

@@ -36,7 +36,7 @@ def test_layout_accepts_a_page():
         {"elements": [{"id": "a", "type": "shape", "shape": "star", "x": 0, "y": 0, "w": 0, "h": 1}]},  # zero width
         {"elements": [{"id": "a b", "type": "shape", "shape": "star", "x": 0, "y": 0, "w": 1, "h": 1}]},  # bad id
         {"elements": [{"id": "a", "type": "shape", "shape": "star", "x": 0, "y": 0, "w": 1, "h": 1}] * 2},  # dup ids
-        {"elements": [{"id": f"e{i}", "type": "shape", "shape": "rect", "x": 0, "y": 0, "w": 1, "h": 1} for i in range(31)]},
+        {"elements": [{"id": f"e{i}", "type": "shape", "shape": "rect", "x": 0, "y": 0, "w": 1, "h": 1} for i in range(41)]},
         {"elements": [], "script": "alert(1)"},  # unknown field
     ],
 )

@@ -206,3 +206,46 @@ def test_deleting_lesson_deletes_slides(db_client, teacher):
     _add(db_client, h, lesson)
     assert db_client.delete(f"/api/v1/lessons/{lesson['id']}", headers=h).status_code == 204
     assert db_client.get(_url(lesson), headers=h).status_code == 404
+
+
+# ------------------------------------------------------- editor polish (step 1)
+def test_new_shapes_fonts_crop_and_background_image(db_client, teacher, upload):
+    h = teacher["headers"]
+    lesson = _lesson(db_client, h)
+    img = upload(teacher)
+    layout = {
+        "background": "#FAEFE9",
+        "background_asset_id": img,
+        "elements": [
+            {"id": "t", "type": "text", "text": "ب", "font": "lalezar", "underline": True, "background": "#FCDC9F",
+             "x": 0, "y": 0, "w": 30, "h": 30, "opacity": 0.8, "locked": True},
+            *[{"id": f"s{i}", "type": "shape", "shape": s, "x": 0, "y": 0, "w": 5, "h": 5}
+              for i, s in enumerate(["triangle", "diamond", "hexagon", "arrow", "speech_bubble", "sun", "moon", "flower", "line"])],
+            {"id": "i", "type": "image", "asset_id": img, "x": 50, "y": 0, "w": 40, "h": 40,
+             "crop": {"x": 10, "y": 10, "w": 50, "h": 60}, "flip": True},
+        ],
+    }
+    s = _add(db_client, h, lesson, layout=layout)
+    assert s["layout"]["background_asset_id"] == img
+    assert s["layout"]["elements"][0]["font"] == "lalezar" and s["layout"]["elements"][-1]["crop"]["w"] == 50
+
+
+@pytest.mark.parametrize(
+    "layout",
+    [
+        {"background_asset_id": str(uuid4()), "elements": []},  # background image not hers
+        {"elements": [{"id": "t", "type": "text", "text": "x", "font": "comic_sans", "x": 0, "y": 0, "w": 1, "h": 1}]},
+        {"elements": [{"id": "s", "type": "shape", "shape": "dragon", "x": 0, "y": 0, "w": 1, "h": 1}]},
+        {"elements": [{"id": "s", "type": "shape", "shape": "star", "opacity": 2, "x": 0, "y": 0, "w": 1, "h": 1}]},
+    ],
+)
+def test_editor_polish_rejects(db_client, teacher, layout):
+    lesson = _lesson(db_client, teacher["headers"])
+    assert db_client.post(_url(lesson), headers=teacher["headers"], json={"layout": layout}).status_code == 422
+
+
+def test_crop_must_stay_inside(db_client, teacher, upload):
+    lesson = _lesson(db_client, teacher["headers"])
+    img = upload(teacher)
+    el = {"id": "i", "type": "image", "asset_id": img, "x": 0, "y": 0, "w": 10, "h": 10, "crop": {"x": 60, "y": 0, "w": 50, "h": 50}}
+    assert db_client.post(_url(lesson), headers=teacher["headers"], json={"layout": {"elements": [el]}}).status_code == 422
