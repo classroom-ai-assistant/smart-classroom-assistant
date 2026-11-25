@@ -19,7 +19,9 @@ import re
 from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator, model_validator
+
+from app.modules.stickers.catalog import names as sticker_names
 
 HexColor = Annotated[str, StringConstraints(pattern=re.compile(r"^#[0-9a-fA-F]{6}$"))]
 ElementId = Annotated[str, StringConstraints(pattern=re.compile(r"^[A-Za-z0-9_-]{1,40}$"))]
@@ -41,6 +43,18 @@ class _Strict(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+ANIMATIONS = ("fade", "slide_up", "slide_down", "slide_left", "slide_right", "zoom", "bounce", "pop", "spin", "wiggle")
+TRANSITIONS = ("none", "fade", "slide", "zoom")
+
+
+class Animation(_Strict):
+    """Entrance animation, played in presentation and robot mode (not in PPTX)."""
+
+    effect: Literal[ANIMATIONS]  # type: ignore[valid-type]
+    delay: float = Field(default=0, ge=0, le=10)  # seconds after the slide appears
+    duration: float = Field(default=0.6, ge=0.2, le=5)
+
+
 class _Box(_Strict):
     id: ElementId
     x: Percent
@@ -52,6 +66,7 @@ class _Box(_Strict):
     opacity: float = Field(default=1, ge=0, le=1)
     # Locked elements (e.g. template decoration) cannot be moved by accident.
     locked: bool = False
+    animation: Animation | None = None
 
 
 class TextElement(_Box):
@@ -108,6 +123,29 @@ class VideoElement(_Box):
     loop: bool = False
 
 
+class StickerElement(_Box):
+    """A picture from the built-in sticker library (no upload needed)."""
+
+    type: Literal["sticker"]
+    name: str
+    flip: bool = False
+
+    @field_validator("name")
+    @classmethod
+    def _known(cls, value: str) -> str:
+        if value not in sticker_names():
+            raise ValueError("unknown sticker")
+        return value
+
+
+class PlaceholderElement(_Box):
+    """An empty picture spot with what to look for (e.g. 'بطة صفراء').
+    The teacher fills it from ملفاتي or the free image search."""
+
+    type: Literal["placeholder"]
+    query: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=80)]
+
+
 class ShapeElement(_Box):
     type: Literal["shape"]
     shape: Literal[SHAPES]  # type: ignore[valid-type]
@@ -117,13 +155,17 @@ class ShapeElement(_Box):
     dashed: bool = False
 
 
-Element = Annotated[TextElement | ImageElement | VideoElement | ShapeElement, Field(discriminator="type")]
+Element = Annotated[
+    TextElement | ImageElement | VideoElement | StickerElement | PlaceholderElement | ShapeElement,
+    Field(discriminator="type"),
+]
 
 
 class Layout(_Strict):
     background: HexColor = "#FAEFE9"
     # Optional picture covering the whole slide (one of the teacher's images).
     background_asset_id: UUID | None = None
+    transition: Literal[TRANSITIONS] = "none"  # type: ignore[valid-type]
     elements: list[Element] = Field(default_factory=list, max_length=MAX_ELEMENTS)
 
     @model_validator(mode="after")

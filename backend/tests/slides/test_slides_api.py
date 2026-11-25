@@ -70,7 +70,7 @@ def test_blank_slide_then_lesson_is_ready(db_client, teacher):
     h = teacher["headers"]
     lesson = _lesson(db_client, h)
     s = _add(db_client, h, lesson)
-    assert s["order_index"] == 0 and s["layout"] == {"background": "#FAEFE9", "elements": []}
+    assert s["order_index"] == 0 and s["layout"] == {"background": "#FAEFE9", "elements": [], "transition": "none"}
     assert s["speech"] is None and s["question"] is None
     got = db_client.get(f"/api/v1/lessons/{lesson['id']}", headers=h).json()
     assert got["status"] == "ready" and got["slide_count"] == 1 and [x["id"] for x in got["slides"]] == [s["id"]]

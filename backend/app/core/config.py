@@ -42,6 +42,10 @@ class Settings(BaseSettings):
     gemini_tts_fallback_model: str | None = "gemini-3.8-flash-lite-tts"
     speech_requests_per_hour: int = Field(default=60, ge=1)
 
+    # Free photo search (Pixabay, safe search always on). Optional key.
+    pixabay_api_key: SecretStr | None = None
+    image_requests_per_hour: int = Field(default=300, ge=1)
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def _split_origins(cls, value: object) -> object:
@@ -49,7 +53,7 @@ class Settings(BaseSettings):
             return [origin.strip() for origin in value.split(",") if origin.strip()]
         return value
 
-    @field_validator("gemini_api_key", mode="before")
+    @field_validator("gemini_api_key", "pixabay_api_key", mode="before")
     @classmethod
     def _blank_key_is_none(cls, value: object) -> object:
         return None if isinstance(value, str) and not value.strip() else value
