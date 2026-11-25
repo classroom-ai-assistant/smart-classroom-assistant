@@ -20,12 +20,16 @@ from app.modules.assets.router import router as assets_router
 from app.modules.ai.client import GeminiClient
 from app.modules.ai.deps import AiRateLimiter
 from app.modules.health.router import router as health_router
+from app.modules.images.client import PixabayClient
+from app.modules.images.router import router as images_router
 from app.modules.lessons.router import router as lessons_router
 from app.modules.saved_pages.router import router as saved_pages_router
 from app.modules.saved_slides.router import router as saved_slides_router
+from app.modules.slides.ai import router as slides_ai_router
 from app.modules.slides.router import router as slides_router
 from app.modules.speech.client import GeminiSpeechClient
 from app.modules.speech.router import router as speech_router
+from app.modules.stickers.router import router as stickers_router
 from app.modules.suggestions.router import router as suggestions_router
 from app.modules.teachers.router import router as teachers_router
 from app.shared.errors.handlers import register_error_handlers
@@ -54,9 +58,15 @@ def create_app(settings: Settings | None = None, *, connect_db: bool = True) -> 
                 ai_http,
                 fallback_model=settings.gemini_tts_fallback_model or None,
             )
+        image_http = None
+        if settings.pixabay_api_key is not None and getattr(app.state, "image_search", None) is None:
+            image_http = httpx.AsyncClient(timeout=30)
+            app.state.image_search = PixabayClient(settings.pixabay_api_key.get_secret_value(), image_http)
         try:
             yield
         finally:
+            if image_http is not None:
+                await image_http.aclose()
             if ai_http is not None:
                 await ai_http.aclose()
             if app.state.db_pool is not None:
@@ -74,6 +84,8 @@ def create_app(settings: Settings | None = None, *, connect_db: bool = True) -> 
     app.state.ai_limiter = AiRateLimiter(settings.ai_requests_per_hour)
     app.state.speech_client = None  # set at startup with GEMINI_API_KEY; tests may inject a fake
     app.state.speech_limiter = AiRateLimiter(settings.speech_requests_per_hour)
+    app.state.image_search = None  # set at startup with PIXABAY_API_KEY; tests may inject a fake
+    app.state.image_limiter = AiRateLimiter(settings.image_requests_per_hour)
     app.state.token_verifier = TokenVerifier(
         issuer=settings.jwt_issuer,
         audience=settings.jwt_audience,
@@ -99,7 +111,10 @@ def create_app(settings: Settings | None = None, *, connect_db: bool = True) -> 
     app.include_router(assets_router)
     app.include_router(saved_pages_router)
     app.include_router(saved_slides_router)
+    app.include_router(slides_ai_router)
     app.include_router(slides_router)
+    app.include_router(stickers_router)
+    app.include_router(images_router)
     return app
 
 

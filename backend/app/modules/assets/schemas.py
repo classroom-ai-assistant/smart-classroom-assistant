@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from enum import StrEnum
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
@@ -39,6 +39,9 @@ class AssetRegister(BaseModel):
     file_name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
     width: int | None = Field(default=None, gt=0, le=20000)
     height: int | None = Field(default=None, gt=0, le=20000)
+    # Set when the picture came from the free image search: credit its author.
+    source: Literal["upload", "library"] = "upload"
+    attribution: Annotated[str, StringConstraints(strip_whitespace=True, max_length=300)] | None = None
 
 
 class AssetOut(BaseModel):

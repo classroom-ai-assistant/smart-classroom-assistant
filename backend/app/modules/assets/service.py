@@ -39,6 +39,8 @@ class AssetService:
                 "size_bytes": stored["size_bytes"],
                 "width": data.width if kind is not kind.pdf else None,
                 "height": data.height if kind is not kind.pdf else None,
+                "source": data.source,
+                "attribution": data.attribution or None,
             }
         )
         if row is None:

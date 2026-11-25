@@ -38,8 +38,8 @@ class AssetRepository:
             row = await conn.fetchrow(
                 f"""
                 insert into public.assets as a
-                  (teacher_id, kind, storage_path, file_name, mime_type, size_bytes, width, height)
-                values ($1, $2::public.asset_kind, $3, $4, $5, $6, $7, $8)
+                  (teacher_id, kind, storage_path, file_name, mime_type, size_bytes, width, height, source, attribution)
+                values ($1, $2::public.asset_kind, $3, $4, $5, $6, $7, $8, $9::public.asset_source, $10)
                 on conflict (storage_path) do nothing
                 returning {COLUMNS}
                 """,
@@ -51,6 +51,8 @@ class AssetRepository:
                 values["size_bytes"],
                 values["width"],
                 values["height"],
+                values.get("source", "upload"),
+                values.get("attribution"),
             )
         return dict(row) if row else None
 
