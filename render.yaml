@@ -43,3 +43,6 @@ services:
         value: gemini-3.8-flash-tts
       - key: GEMINI_TTS_FALLBACK_MODEL
         value: gemini-3.8-flash-lite-tts
+      # Free picture search (safe search). Secret, set in the Render dashboard.
+      - key: PIXABAY_API_KEY
+        sync: false
