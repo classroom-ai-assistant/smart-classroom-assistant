@@ -21,6 +21,9 @@ UPDATABLE_SETTING_COLUMNS = frozenset(
         "default_alert_lead_minutes",
         "kids_mode_pin_hash",
         "privacy_notice_accepted_at",
+        "robot_name",
+        "robot_style",
+        "robot_voice",
     }
 )
 
@@ -30,7 +33,8 @@ select t.id, t.display_name, t.created_at,
        s.no_answer_action::text as no_answer_action,
        s.default_alert_lead_minutes,
        (s.kids_mode_pin_hash is not null) as has_kids_mode_pin,
-       s.privacy_notice_accepted_at, s.updated_at as settings_updated_at
+       s.privacy_notice_accepted_at, s.robot_name, s.robot_style, s.robot_voice,
+       s.updated_at as settings_updated_at
 from public.teachers t
 join public.teacher_settings s on s.teacher_id = t.id
 where t.id = $1

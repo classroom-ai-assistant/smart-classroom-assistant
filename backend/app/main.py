@@ -26,6 +26,7 @@ from app.modules.lessons.router import router as lessons_router
 from app.modules.saved_pages.router import router as saved_pages_router
 from app.modules.saved_slides.router import router as saved_slides_router
 from app.modules.slides.ai import router as slides_ai_router
+from app.modules.slides.narration import router as narration_router
 from app.modules.slides.router import router as slides_router
 from app.modules.speech.client import GeminiSpeechClient
 from app.modules.speech.router import router as speech_router
@@ -112,6 +113,7 @@ def create_app(settings: Settings | None = None, *, connect_db: bool = True) -> 
     app.include_router(saved_pages_router)
     app.include_router(saved_slides_router)
     app.include_router(slides_ai_router)
+    app.include_router(narration_router)
     app.include_router(slides_router)
     app.include_router(stickers_router)
     app.include_router(images_router)

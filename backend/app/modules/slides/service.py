@@ -65,7 +65,12 @@ class SlideService:
                 f"الحد الأقصى {MAX_SLIDES} شريحة في الدرس", details=[{"field": "slides", "type": "too_many"}]
             )
         row = await self._repo.insert(
-            lesson_id, source["order_index"] + 1, source["layout"], source["speech"], source["question"]
+            lesson_id,
+            source["order_index"] + 1,
+            source["layout"],
+            source["speech"],
+            source["question"],
+            source["speech_auto"],
         )
         if row is None:
             raise NotFoundError(LESSON_NOT_FOUND)
@@ -82,7 +87,9 @@ class SlideService:
             await self._check_files(data.layout)
             values["layout"] = data.layout.model_dump(mode="json", exclude_none=True)
         if "speech" in fields:
+            # The teacher wrote (or cleared) the words herself: the robot keeps them.
             values["speech"] = data.speech or None
+            values["speech_auto"] = False
         if "question" in fields:
             values["question"] = data.question.model_dump(mode="json", exclude_none=True) if data.question else None
         try:

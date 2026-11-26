@@ -6,7 +6,7 @@ rejected here with a clear field name, before it reaches the database.
 
 from datetime import datetime
 from enum import StrEnum
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
@@ -21,6 +21,21 @@ class NoAnswerAction(StrEnum):
 DisplayName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)]
 
 
+class RobotStyle(StrEnum):
+    storyteller = "storyteller"  # حكواتي: يحكي بأسلوب قصصي
+    playful = "playful"  # مرح: نشيط ويحب الألعاب
+    calm = "calm"  # هادئ: لطيف وبطيء
+
+
+# The robot's name: letters (Arabic or Latin), digits, spaces, - and _.
+# It is spoken to the children, so no symbols or links.
+RobotName = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, min_length=1, max_length=30, pattern=r"^[\w\u0600-\u06FF \-]+$"),
+]
+RobotVoice = Literal["Puck", "Kore", "Leda", "Achird", "Sulafat", "Zephyr"]
+
+
 class SettingsOut(BaseModel):
     voice_volume: int
     speech_rate: float
@@ -29,6 +44,9 @@ class SettingsOut(BaseModel):
     default_alert_lead_minutes: int
     has_kids_mode_pin: bool
     privacy_notice_accepted_at: datetime | None
+    robot_name: str
+    robot_style: RobotStyle
+    robot_voice: RobotVoice
     updated_at: datetime
 
 
@@ -56,6 +74,9 @@ class SettingsUpdate(BaseModel):
     answer_wait_seconds: int | None = Field(default=None, ge=3, le=30)
     no_answer_action: NoAnswerAction | None = None
     default_alert_lead_minutes: int | None = Field(default=None, ge=0, le=60)
+    robot_name: RobotName | None = None
+    robot_style: RobotStyle | None = None
+    robot_voice: RobotVoice | None = None
     # FR-086: the teacher acknowledges the external-processing notice. Can only be set, not undone.
     privacy_notice_accepted: Annotated[bool, Field(strict=True)] | None = None
 

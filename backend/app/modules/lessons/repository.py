@@ -146,8 +146,8 @@ class LessonRepository:
             )
             await conn.execute(
                 """
-                insert into public.slides (lesson_id, teacher_id, order_index, layout, speech, question)
-                select $1, teacher_id, order_index, layout, speech, question
+                insert into public.slides (lesson_id, teacher_id, order_index, layout, speech, question, speech_auto)
+                select $1, teacher_id, order_index, layout, speech, question, speech_auto
                 from public.slides where lesson_id = $2 and teacher_id = $3
                 """,
                 new_id,

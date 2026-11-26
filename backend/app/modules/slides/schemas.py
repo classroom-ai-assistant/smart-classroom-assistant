@@ -53,6 +53,9 @@ class SlideOut(BaseModel):
     order_index: int
     layout: dict[str, Any]
     speech: str | None
+    # True when the robot wrote `speech` itself (it may rewrite it later);
+    # False when the teacher wrote it (kept as she wrote it).
+    speech_auto: bool
     question: dict[str, Any] | None
     created_at: datetime
     updated_at: datetime
