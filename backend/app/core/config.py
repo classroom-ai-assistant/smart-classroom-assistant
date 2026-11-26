@@ -54,6 +54,10 @@ class Settings(BaseSettings):
     listen_requests_per_hour: int = Field(default=300, ge=1)
     # Questions to the robot (each = one AI answer, plus listening if by voice).
     ask_requests_per_hour: int = Field(default=120, ge=1)
+    # Live voice call with the robot (OpenAI Realtime, same key).
+    openai_realtime_model: str = "gpt-realtime-2.1-mini"
+    openai_realtime_voice: str = "marin"
+    live_sessions_per_hour: int = Field(default=20, ge=1)
 
     @field_validator("cors_origins", mode="before")
     @classmethod

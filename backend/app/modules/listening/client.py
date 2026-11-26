@@ -66,9 +66,20 @@ class OpenAiTranscriber:
             self._log(response)
             raise AiFailedError()
         try:
-            return str(response.json().get("text") or "").strip()
+            body = response.json()
         except ValueError as exc:
             raise AiFailedError() from exc
+        text = str(body.get("text") or "").strip()
+        # Diagnostics only: sizes and counts, never the words themselves.
+        logger.info(
+            "openai transcription ok bytes=%s mime=%s keywords=%s chars=%s languages=%s",
+            len(audio),
+            mime,
+            len(keywords),
+            len(text),
+            [lang.get("code") for lang in body.get("languages") or [] if isinstance(lang, dict)],
+        )
+        return text
 
     @staticmethod
     def _log(response: httpx.Response) -> None:
