@@ -46,6 +46,13 @@ class Settings(BaseSettings):
     pixabay_api_key: SecretStr | None = None
     image_requests_per_hour: int = Field(default=300, ge=1)
 
+    # Listening to answers (internship prototype, team voices only): OpenAI
+    # speech-to-text. Without a key the listen endpoint answers 503.
+    openai_api_key: SecretStr | None = None
+    openai_transcribe_model: str = "gpt-transcribe"
+    openai_timeout_seconds: float = Field(default=20, gt=0)
+    listen_requests_per_hour: int = Field(default=300, ge=1)
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def _split_origins(cls, value: object) -> object:
@@ -53,7 +60,7 @@ class Settings(BaseSettings):
             return [origin.strip() for origin in value.split(",") if origin.strip()]
         return value
 
-    @field_validator("gemini_api_key", "pixabay_api_key", mode="before")
+    @field_validator("gemini_api_key", "pixabay_api_key", "openai_api_key", mode="before")
     @classmethod
     def _blank_key_is_none(cls, value: object) -> object:
         return None if isinstance(value, str) and not value.strip() else value

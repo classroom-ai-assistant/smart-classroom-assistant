@@ -27,6 +27,8 @@ from app.modules.saved_pages.router import router as saved_pages_router
 from app.modules.saved_slides.router import router as saved_slides_router
 from app.modules.slides.ai import router as slides_ai_router
 from app.modules.slides.narration import router as narration_router
+from app.modules.listening.client import OpenAiTranscriber
+from app.modules.listening.router import router as listening_router
 from app.modules.slides.router import router as slides_router
 from app.modules.speech.client import GeminiSpeechClient
 from app.modules.speech.router import router as speech_router
@@ -63,9 +65,17 @@ def create_app(settings: Settings | None = None, *, connect_db: bool = True) -> 
         if settings.pixabay_api_key is not None and getattr(app.state, "image_search", None) is None:
             image_http = httpx.AsyncClient(timeout=30)
             app.state.image_search = PixabayClient(settings.pixabay_api_key.get_secret_value(), image_http)
+        listen_http = None
+        if settings.openai_api_key is not None and getattr(app.state, "transcriber", None) is None:
+            listen_http = httpx.AsyncClient(timeout=settings.openai_timeout_seconds)
+            app.state.transcriber = OpenAiTranscriber(
+                settings.openai_api_key.get_secret_value(), settings.openai_transcribe_model, listen_http
+            )
         try:
             yield
         finally:
+            if listen_http is not None:
+                await listen_http.aclose()
             if image_http is not None:
                 await image_http.aclose()
             if ai_http is not None:
@@ -85,6 +95,8 @@ def create_app(settings: Settings | None = None, *, connect_db: bool = True) -> 
     app.state.ai_limiter = AiRateLimiter(settings.ai_requests_per_hour)
     app.state.speech_client = None  # set at startup with GEMINI_API_KEY; tests may inject a fake
     app.state.speech_limiter = AiRateLimiter(settings.speech_requests_per_hour)
+    app.state.transcriber = None  # set at startup with OPENAI_API_KEY; tests may inject a fake
+    app.state.listen_limiter = AiRateLimiter(settings.listen_requests_per_hour)
     app.state.image_search = None  # set at startup with PIXABAY_API_KEY; tests may inject a fake
     app.state.image_limiter = AiRateLimiter(settings.image_requests_per_hour)
     app.state.token_verifier = TokenVerifier(
@@ -114,6 +126,7 @@ def create_app(settings: Settings | None = None, *, connect_db: bool = True) -> 
     app.include_router(saved_slides_router)
     app.include_router(slides_ai_router)
     app.include_router(narration_router)
+    app.include_router(listening_router)
     app.include_router(slides_router)
     app.include_router(stickers_router)
     app.include_router(images_router)
