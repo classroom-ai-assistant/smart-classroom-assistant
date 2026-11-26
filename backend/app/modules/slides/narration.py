@@ -11,11 +11,19 @@ The teacher stays in control:
   the model as context, unless she asks to rewrite everything;
 - she can edit any slide's words afterwards, which marks them as hers.
 
+Give and take: like a teacher, the robot stops to check on the children
+("فهمتم يا أطفال؟", "مين يعرف...؟"). Each stop is written as the marker
+PAUSE inside the words. The kids-mode player says the part before it,
+waits (the teacher's answer_wait_seconds) and goes on; the words after a
+stop fit whatever the children said ("أحسنتم! صح، ..."). The robot does
+not listen to the children yet (step 4ب).
+
 Only the lesson, the slides and the teacher's robot settings are sent to
 the model. Nothing about any child is.
 """
 
 import logging
+import re
 from typing import Any
 from uuid import UUID
 
@@ -38,6 +46,10 @@ router = APIRouter(prefix="/api/v1/lessons/{lesson_id}", tags=["slides (AI)"])
 
 MAX_NARRATED_SLIDES = 40
 MAX_SPEECH = 2000
+PAUSE = "[وقفة]"
+MAX_PAUSES_PER_SLIDE = 3
+# What models write instead of the exact marker.
+_PAUSE_VARIANTS = re.compile(r"[\[(（]\s*(?:وقفة|وقفه|توقف|pause)\s*[\])）]", re.IGNORECASE)
 
 STYLES = {
     "storyteller": "حكواتي دافئ: يحكي كل شيء كأنه قصة، يستخدم «كان يا ما كان» و«وفجأة» ويشوّق الأطفال لما بعده.",
@@ -60,6 +72,8 @@ class NarrateResult(BaseModel):
     slides: list[SlideOut]
     written: int  # slides whose words the robot wrote now
     kept: int  # slides whose words the teacher wrote and were left as they are
+    # Where the robot stops and waits for the children inside `speech`.
+    pause_marker: str = PAUSE
 
 
 # ----------------------------------------------------------------- prompt
@@ -112,13 +126,31 @@ def narrate_prompt(
         "- في الشريحة الأخيرة اختم بتلخيص بسيط جداً وتشجيع ومديح للأطفال.\n"
         "- اربط كل شريحة بالتي قبلها (مثل: «والآن...»، «هل تعرفون ماذا بعد؟») حتى يكون الكلام قصة واحدة متصلة.\n"
         "- تكلّم عمّا يظهر في الشريحة نفسها، ولا تذكر أشياء غير موجودة فيها.\n"
-        "- من جملتين إلى أربع جمل قصيرة لكل شريحة (حتى 400 حرف تقريباً).\n"
-        "- أضف أحياناً تفاعلاً صغيراً آمناً داخل الفصل: «صفّقوا معي»، «قولوا معي»، «أشيروا إلى...»، «ارفعوا أيديكم»، «هيا نعدّ معاً».\n"
-        "- إذا كان في الشريحة سؤال للأطفال فاختم كلامك بطرح السؤال نفسه.\n"
+        "- من جملتين إلى ست جمل قصيرة لكل شريحة (حتى 600 حرف تقريباً).\n"
+        "- كن معلّماً حقيقياً بالأخذ والعطاء، لا تلقي الكلام إلقاءً: في كل شريحة تقريباً اسأل الأطفال وتوقّف لهم، "
+        "مثل «فهمتم يا أطفال؟»، «مين يعرف...؟»، «صح ولا خطأ؟»، «وش تتوقعون يصير؟»، «قولوا معي...»، «هيا نعدّ معاً».\n"
+        f"- عند كل توقّف تنتظر فيه الأطفال اكتب العلامة {PAUSE} بالضبط مكان الانتظار، "
+        f"ثم أكمل بجملة تناسب أي جواب منهم (مثل «أحسنتم! صح، ...» ثم أعد الفكرة باختصار). من وقفة إلى {MAX_PAUSES_PER_SLIDE} وقفات في الشريحة.\n"
+        "- أضف أحياناً حركة صغيرة آمنة داخل الفصل: «صفّقوا معي»، «أشيروا إلى...»، «ارفعوا أيديكم».\n"
+        f"- إذا كان في الشريحة سؤال للأطفال فاختم كلامك بطرح السؤال نفسه ثم {PAUSE}.\n"
         "- خاطب الأطفال جميعاً (يا أصدقائي، يا أبطال)، ولا تنادِ طفلاً باسمه ولا تسأل عن أي معلومة شخصية.\n"
-        "- لا تكتب علامات أو رموز تعبيرية أو وصفاً للحركة بين أقواس؛ فقط الكلام الذي يُقال بصوت عالٍ.\n"
+        f"- لا تكتب رموزاً تعبيرية ولا وصفاً للحركة بين أقواس؛ فقط الكلام الذي يُقال بصوت عالٍ، والعلامة {PAUSE} وحدها مسموحة.\n"
         'أجب بالشكل: {"slides": [{"n": رقم الشريحة, "speech": "كلامك"}]}'
     )
+
+
+def clean_pauses(speech: str) -> str:
+    """Exact marker only, never at the start, no two in a row, at most
+    MAX_PAUSES_PER_SLIDE (extra ones are dropped)."""
+    out: list[str] = []
+    pauses = 0
+    for i, part in enumerate(_PAUSE_VARIANTS.sub(PAUSE, speech).split(PAUSE)):
+        if i and out and out[-1] != PAUSE and pauses < MAX_PAUSES_PER_SLIDE:
+            out.append(PAUSE)
+            pauses += 1
+        if part.strip():
+            out.append(" ".join(part.split()))
+    return " ".join(out)
 
 
 def pick_speeches(raw: Any, targets: set[int]) -> dict[int, str]:
@@ -132,7 +164,7 @@ def pick_speeches(raw: Any, targets: set[int]) -> dict[int, str]:
             index = int(item.get("n")) - 1
         except (TypeError, ValueError):
             continue
-        speech = str(item.get("speech") or "").strip()[:MAX_SPEECH]
+        speech = clean_pauses(str(item.get("speech") or ""))[:MAX_SPEECH].strip()
         if index in targets and speech and index not in found:
             found[index] = speech
     return found

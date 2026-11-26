@@ -177,3 +177,40 @@ def test_narrate_errors(db_client, teacher, make_teacher, make_token):
     r = db_client.post(f"/api/v1/lessons/{lesson['id']}/narrate", headers=h)
     assert r.status_code == 502 and r.json()["error"]["code"] == "ai_failed"
     assert db_client.get(f"/api/v1/lessons/{lesson['id']}/slides", headers=h).json()[0]["speech"] is None
+
+
+# ------------------------------------------------------------- give and take
+@pytest.mark.parametrize(
+    ("raw", "clean"),
+    [
+        ("فهمتم يا أطفال؟ [وقفة] أحسنتم!", "فهمتم يا أطفال؟ [وقفة] أحسنتم!"),
+        ("[وقفة] مرحبا", "مرحبا"),
+        ("مين يعرف؟ (وقفه) صح! [ pause ] وبعد؟[توقف]", "مين يعرف؟ [وقفة] صح! [وقفة] وبعد؟ [وقفة]"),
+        ("أ [وقفة][وقفة]  ب", "أ [وقفة] ب"),
+        ("أ [وقفة] ب [وقفة] ج [وقفة] د [وقفة] هـ", "أ [وقفة] ب [وقفة] ج [وقفة] د هـ"),
+        ("بلا وقفات", "بلا وقفات"),
+    ],
+)
+def test_clean_pauses(raw, clean):
+    from app.modules.slides.narration import clean_pauses
+
+    assert clean_pauses(raw) == clean
+
+
+def test_prompt_asks_for_teacher_like_pauses():
+    p = narrate_prompt({"title": "ت", "topic": "م"}, "روبو", "playful", SLIDES, {0})
+    assert "فهمتم يا أطفال؟" in p and "[وقفة]" in p
+
+
+def test_speech_never_reads_the_pause_marker(client, auth_headers):
+    class FakeTts:
+        texts: list[str] = []
+
+        async def synthesize(self, text, voice):
+            self.texts.append(text)
+            return b"RIFF"
+
+    tts = FakeTts()
+    client.app.state.speech_client = tts
+    r = client.post("/api/v1/speech", headers=auth_headers, json={"text": "فهمتم؟ [وقفة] أحسنتم"})
+    assert r.status_code == 200 and tts.texts == ["فهمتم؟ ، أحسنتم"]
