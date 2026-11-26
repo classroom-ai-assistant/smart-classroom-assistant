@@ -29,6 +29,8 @@ from app.modules.slides.ai import router as slides_ai_router
 from app.modules.slides.narration import router as narration_router
 from app.modules.listening.client import OpenAiTranscriber
 from app.modules.listening.ask import router as ask_router
+from app.modules.listening.live import LiveConfig
+from app.modules.listening.live import router as live_router
 from app.modules.listening.router import router as listening_router
 from app.modules.slides.router import router as slides_router
 from app.modules.speech.client import GeminiSpeechClient
@@ -72,6 +74,13 @@ def create_app(settings: Settings | None = None, *, connect_db: bool = True) -> 
             app.state.transcriber = OpenAiTranscriber(
                 settings.openai_api_key.get_secret_value(), settings.openai_transcribe_model, listen_http
             )
+        if listen_http is not None and getattr(app.state, "live_config", None) is None:
+            app.state.live_config = LiveConfig(
+                api_key=settings.openai_api_key.get_secret_value(),
+                model=settings.openai_realtime_model,
+                voice=settings.openai_realtime_voice,
+            )
+            app.state.live_http = listen_http
         try:
             yield
         finally:
@@ -99,6 +108,9 @@ def create_app(settings: Settings | None = None, *, connect_db: bool = True) -> 
     app.state.transcriber = None  # set at startup with OPENAI_API_KEY; tests may inject a fake
     app.state.listen_limiter = AiRateLimiter(settings.listen_requests_per_hour)
     app.state.ask_limiter = AiRateLimiter(settings.ask_requests_per_hour)
+    app.state.live_config = None  # set at startup with OPENAI_API_KEY; tests may inject one
+    app.state.live_http = None
+    app.state.live_limiter = AiRateLimiter(settings.live_sessions_per_hour)
     app.state.image_search = None  # set at startup with PIXABAY_API_KEY; tests may inject a fake
     app.state.image_limiter = AiRateLimiter(settings.image_requests_per_hour)
     app.state.token_verifier = TokenVerifier(
@@ -130,6 +142,7 @@ def create_app(settings: Settings | None = None, *, connect_db: bool = True) -> 
     app.include_router(narration_router)
     app.include_router(listening_router)
     app.include_router(ask_router)
+    app.include_router(live_router)
     app.include_router(slides_router)
     app.include_router(stickers_router)
     app.include_router(images_router)
