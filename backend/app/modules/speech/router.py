@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, StringConstraints
 
 from app.core.security import CurrentTeacher, get_current_teacher
 from app.modules.ai.deps import AiRateLimiter
+from app.modules.slides.narration import PAUSE
 from app.modules.speech.client import VOICES, SpeechClient
 from app.shared.errors.exceptions import AiUnavailableError
 
@@ -46,5 +47,7 @@ async def speak(
     limiter: AiRateLimiter = Depends(get_speech_limiter),
 ) -> Response:
     limiter.check(teacher.id)
-    audio = await client.synthesize(data.text, data.voice)
+    # The robot's stop marker is for the player, never read aloud.
+    text = " ".join(data.text.replace(PAUSE, "، ").split()).strip(" ،") or "،"
+    audio = await client.synthesize(text, data.voice)
     return Response(content=audio, media_type="audio/wav", headers={"Cache-Control": "no-store"})

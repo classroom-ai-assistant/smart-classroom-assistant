@@ -7,7 +7,7 @@ from uuid import UUID
 
 from app.database.rls_session import TeacherDatabase
 
-COLUMNS = "s.id, s.lesson_id, s.order_index, s.layout, s.speech, s.question, s.created_at, s.updated_at"
+COLUMNS = "s.id, s.lesson_id, s.order_index, s.layout, s.speech, s.speech_auto, s.question, s.created_at, s.updated_at"
 
 SLIDES_SQL = f"""
 select {COLUMNS} from public.slides s
@@ -64,7 +64,13 @@ class SlideRepository:
         return dict(row) if row else None
 
     async def insert(
-        self, lesson_id: UUID, position: int | None, layout: dict, speech: str | None, question: dict | None
+        self,
+        lesson_id: UUID,
+        position: int | None,
+        layout: dict,
+        speech: str | None,
+        question: dict | None,
+        speech_auto: bool = False,
     ) -> dict[str, Any] | None:
         async with self._db.transaction() as conn:
             if not await self._lock_lesson(conn, lesson_id):
@@ -79,8 +85,8 @@ class SlideRepository:
             )
             row = await conn.fetchrow(
                 f"""
-                insert into public.slides as s (lesson_id, teacher_id, order_index, layout, speech, question)
-                values ($1, $2, $3, $4, $5, $6) returning {COLUMNS}
+                insert into public.slides as s (lesson_id, teacher_id, order_index, layout, speech, question, speech_auto)
+                values ($1, $2, $3, $4, $5, $6, $7) returning {COLUMNS}
                 """,
                 lesson_id,
                 self._teacher_id,
@@ -88,12 +94,13 @@ class SlideRepository:
                 layout,
                 speech,
                 question,
+                speech_auto and speech is not None,
             )
             await self._touch(conn, lesson_id)
         return dict(row)
 
     async def update(self, lesson_id: UUID, slide_id: UUID, values: dict[str, Any]) -> dict[str, Any] | None:
-        allowed = {"layout", "speech", "question"}
+        allowed = {"layout", "speech", "speech_auto", "question"}
         if not values or set(values) - allowed:
             raise ValueError("invalid slide columns")
         cols = sorted(values)
@@ -145,4 +152,30 @@ class SlideRepository:
                 slide_ids,
             )
             await self._touch(conn, lesson_id)
+            return [dict(r) for r in await conn.fetch(SLIDES_SQL, lesson_id, self._teacher_id)]
+
+    async def save_narration(
+        self, lesson_id: UUID, speeches: dict[UUID, str], include_teacher_written: bool
+    ) -> list[dict[str, Any]] | None:
+        """Write the robot's words. Slides whose words the teacher wrote are
+        skipped unless she asked to rewrite everything; the condition is
+        checked again here, so an edit made meanwhile is never lost."""
+        async with self._db.transaction() as conn:
+            if not await self._lock_lesson(conn, lesson_id):
+                return None
+            if speeches:
+                ids = list(speeches)
+                await conn.execute(
+                    """
+                    update public.slides s set speech = n.speech, speech_auto = true
+                    from unnest($2::uuid[], $3::text[]) as n(id, speech)
+                    where s.id = n.id and s.lesson_id = $1
+                      and ($4 or s.speech is null or s.speech_auto)
+                    """,
+                    lesson_id,
+                    ids,
+                    [speeches[i] for i in ids],
+                    include_teacher_written,
+                )
+                await self._touch(conn, lesson_id)
             return [dict(r) for r in await conn.fetch(SLIDES_SQL, lesson_id, self._teacher_id)]

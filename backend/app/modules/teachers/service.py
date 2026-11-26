@@ -37,6 +37,9 @@ class TeacherService:
                 default_alert_lead_minutes=row["default_alert_lead_minutes"],
                 has_kids_mode_pin=row["has_kids_mode_pin"],
                 privacy_notice_accepted_at=row["privacy_notice_accepted_at"],
+                robot_name=row["robot_name"],
+                robot_style=row["robot_style"],
+                robot_voice=row["robot_voice"],
                 updated_at=row["settings_updated_at"],
             ),
         )
@@ -52,6 +55,8 @@ class TeacherService:
         }
         if "no_answer_action" in values:
             values["no_answer_action"] = values["no_answer_action"].value
+        if "robot_style" in values:
+            values["robot_style"] = values["robot_style"].value
         if data.privacy_notice_accepted:
             values["privacy_notice_accepted_at"] = datetime.now(UTC)
         if values and not await self._repo.update_settings(self._teacher.id, values):

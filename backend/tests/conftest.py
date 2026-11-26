@@ -89,6 +89,9 @@ class FakeTeacherRepository:
             "default_alert_lead_minutes": 5,
             "kids_mode_pin_hash": None,
             "privacy_notice_accepted_at": None,
+            "robot_name": "روبو",
+            "robot_style": "playful",
+            "robot_voice": "Puck",
             "settings_updated_at": now,
         }
 
