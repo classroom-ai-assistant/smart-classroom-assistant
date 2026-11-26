@@ -28,6 +28,7 @@ from app.modules.saved_slides.router import router as saved_slides_router
 from app.modules.slides.ai import router as slides_ai_router
 from app.modules.slides.narration import router as narration_router
 from app.modules.listening.client import OpenAiTranscriber
+from app.modules.listening.ask import router as ask_router
 from app.modules.listening.router import router as listening_router
 from app.modules.slides.router import router as slides_router
 from app.modules.speech.client import GeminiSpeechClient
@@ -97,6 +98,7 @@ def create_app(settings: Settings | None = None, *, connect_db: bool = True) -> 
     app.state.speech_limiter = AiRateLimiter(settings.speech_requests_per_hour)
     app.state.transcriber = None  # set at startup with OPENAI_API_KEY; tests may inject a fake
     app.state.listen_limiter = AiRateLimiter(settings.listen_requests_per_hour)
+    app.state.ask_limiter = AiRateLimiter(settings.ask_requests_per_hour)
     app.state.image_search = None  # set at startup with PIXABAY_API_KEY; tests may inject a fake
     app.state.image_limiter = AiRateLimiter(settings.image_requests_per_hour)
     app.state.token_verifier = TokenVerifier(
@@ -127,6 +129,7 @@ def create_app(settings: Settings | None = None, *, connect_db: bool = True) -> 
     app.include_router(slides_ai_router)
     app.include_router(narration_router)
     app.include_router(listening_router)
+    app.include_router(ask_router)
     app.include_router(slides_router)
     app.include_router(stickers_router)
     app.include_router(images_router)

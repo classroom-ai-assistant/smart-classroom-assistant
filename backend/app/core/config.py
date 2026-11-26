@@ -52,6 +52,8 @@ class Settings(BaseSettings):
     openai_transcribe_model: str = "gpt-transcribe"
     openai_timeout_seconds: float = Field(default=20, gt=0)
     listen_requests_per_hour: int = Field(default=300, ge=1)
+    # Questions to the robot (each = one AI answer, plus listening if by voice).
+    ask_requests_per_hour: int = Field(default=120, ge=1)
 
     @field_validator("cors_origins", mode="before")
     @classmethod

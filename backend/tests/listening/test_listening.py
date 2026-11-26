@@ -157,3 +157,54 @@ def test_listen_rejections(db_client, teacher, make_teacher, make_token):
     assert db_client.post(url, headers=other, content=AUDIO).status_code == 404
     assert db_client.post(url, content=AUDIO, headers={"Content-Type": "audio/webm"}).status_code == 401
     assert fake.calls == []
+
+
+# ------------------------------------------------------------- ask the robot
+class FakeAi:
+    def __init__(self, *replies: Any) -> None:
+        self.replies = list(replies)
+        self.prompts: list[str] = []
+
+    async def generate_json(self, system: str, prompt: str) -> Any:
+        self.prompts.append(prompt)
+        return self.replies.pop(0)
+
+
+@pytest.mark.integration
+@requires_db
+def test_ask_by_voice_and_text(db_client, teacher):
+    h = teacher["headers"]
+    db_client.patch("/api/v1/me/settings", headers=h, json={"robot_name": "نجمة"})
+    url = _slide(db_client, h, Q)  # .../slides/{sid}/listen
+    base, sid = url.split("/slides/")[0], url.split("/slides/")[1].split("/")[0]
+    ai = FakeAi({"answer": "البطة تقول كواك كواك!"}, {"answer": "أنا روبوت، وعمري صغير مثلكم!"})
+    db_client.app.state.ai_client = ai
+    db_client.app.state.transcriber = FakeTranscriber("وش تقول البطة؟")
+
+    r = db_client.post(f"{base}/ask?slide_id={sid}", headers={**h, "Content-Type": "audio/webm"}, content=AUDIO)
+    assert r.status_code == 200, r.text
+    assert r.json() == {"heard": "وش تقول البطة؟", "answer": "البطة تقول كواك كواك!"}
+    assert "<<<نجمة>>>" in ai.prompts[0] and "وش تقول البطة؟" in ai.prompts[0] and "سؤال للأطفال" in ai.prompts[0]
+
+    r = db_client.post(f"{base}/ask", headers=h, json={"question": "كم عمرك؟"})
+    assert r.status_code == 200 and r.json()["answer"].startswith("أنا روبوت")
+    assert "الشريحة المعروضة" not in ai.prompts[1]
+
+
+@pytest.mark.integration
+@requires_db
+def test_ask_silence_and_errors(db_client, teacher, make_teacher, make_token):
+    h = teacher["headers"]
+    url = _slide(db_client, h, None)
+    base = url.split("/slides/")[0]
+    ai = FakeAi({"oops": 1}, {"answer": ""})
+    db_client.app.state.ai_client = ai
+    db_client.app.state.transcriber = FakeTranscriber("")
+    r = db_client.post(f"{base}/ask", headers={**h, "Content-Type": "audio/webm"}, content=AUDIO)
+    assert r.json() == {"heard": "", "answer": None} and ai.prompts == []  # nothing heard -> no AI call
+    assert db_client.post(f"{base}/ask", headers=h, json={"question": ""}).status_code == 422
+    assert db_client.post(f"{base}/ask", headers=h, json={"question": "سؤال"}).status_code == 502
+    o = {"Authorization": f"Bearer {make_token(make_teacher('أ. هند'))}"}
+    assert db_client.post(f"{base}/ask", headers=o, json={"question": "سؤال"}).status_code == 404
+    from uuid import uuid4
+    assert db_client.post(f"{base}/ask?slide_id={uuid4()}", headers=h, json={"question": "سؤال"}).status_code == 404
