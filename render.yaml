@@ -46,3 +46,8 @@ services:
       # Free picture search (safe search). Secret, set in the Render dashboard.
       - key: PIXABAY_API_KEY
         sync: false
+      # Listening to answers (prototype). Secret, set in the Render dashboard.
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_TRANSCRIBE_MODEL
+        value: gpt-transcribe
